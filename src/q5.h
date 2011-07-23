@@ -61,64 +61,71 @@ void q5(char* path, char* outfile)
 	while (has_more_slice)
 	{
 		next_level = 0;
+		has_more_slice = 0;
 		/* fetch country */
-		if (request_time.level_ptr[0] >= fetch_level)
+		if (!columnar_eof(request_time))
 		{
-			if (request_time.level_ptr[1] < REQUEST_TIME_MAX_DEF) //is null
+			has_more_slice = 1;
+			assert(request_time.level_ptr<request_time.level_end_buf);
+			if (request_time.level_ptr[0] >= fetch_level)
 			{
+				if (request_time.level_ptr[1] < REQUEST_TIME_MAX_DEF) //is null
+				{
+				}
+				else
+				{
+					assert(request_time.data_ptr._byte_ptr < request_time.data_buf + request_time.data_size);
+					time_out = *request_time.data_ptr._long_ptr++;
+				}
+				request_time.level_ptr += 2;
 			}
-			else
-			{
-				time_out = *request_time.data_ptr._long_ptr++;
-			}
-			request_time.level_ptr += 2;
 		}
-		if (next_level < request_time.level_ptr[0]) next_level = request_time.level_ptr[0];
+		if ((!columnar_eof(request_time)) && (next_level < request_time.level_ptr[0])) next_level = request_time.level_ptr[0];
 
 		/* fetch request_id */
-		if (request_url.level_ptr[0] >= fetch_level)
+		if (!columnar_eof(request_url))
 		{
-			if (request_url.level_ptr[1] < REQUEST_URL_MAX_DEF) //is null
+			has_more_slice =1;
+			assert(request_url.level_ptr < request_url.level_end_buf);
+			if (request_url.level_ptr[0] >= fetch_level)
 			{
-			}
-			else
-			{
-				int len = *request_url.data_ptr._int_ptr++;
-				request_url.data_ptr._int_ptr++;
-				url_out = request_url.data_ptr._byte_ptr;
-
-				len++;
-				len += len % 4;
-				request_url.data_ptr._byte_ptr += len;
-
-				if (time_out > t1 && time_out < t2)
+				if (request_url.level_ptr[1] < REQUEST_URL_MAX_DEF) //is null
 				{
-					unsigned int hash_code = str_hash(url_out);
-					int trail = __builtin_ctz(hash_code);
+				}
+				else
+				{
+					int len = *request_url.data_ptr._int_ptr++;
+					request_url.data_ptr._int_ptr++;
+					url_out = request_url.data_ptr._byte_ptr;
 
-					if (trail >= trailSize)
+					len++;
+					len += len % 4;
+					request_url.data_ptr._byte_ptr += len;
+
+					if (time_out > t1 && time_out < t2)
 					{
-						dmap[hash_code] = trail;
+						unsigned int hash_code = str_hash(url_out);
+						int trail = __builtin_ctz(hash_code);
 
-						if (dmap.size() > max_table_size)
+						if (trail >= trailSize)
 						{
-							trailSize++;
-							//printf("Before:%d\n", dmap.size());
-							for (google::dense_hash_map<unsigned int, int>::const_iterator it = dmap.begin(); it != dmap.end(); ++it)
+							dmap[hash_code] = trail;
+
+							if (dmap.size() > max_table_size)
 							{
-								if (it->second < trailSize) dmap.erase(it->first);
+								trailSize++;
+								for (google::dense_hash_map<unsigned int, int>::const_iterator it = dmap.begin(); it != dmap.end(); ++it)
+								{
+									if (it->second < trailSize) dmap.erase(it->first);
+								}
 							}
-							//printf("After:%d\n", dmap.size());
 						}
 					}
 				}
+				request_url.level_ptr += 2;
 			}
-			request_url.level_ptr += 2;
 		}
 		if (next_level < request_url.level_ptr[0]) next_level = request_url.level_ptr[0];
-
-		/* check end condition */
-		if (columnar_eof(request_url) && columnar_eof(request_time)) has_more_slice = 0;
 
 		fetch_level = next_level; //update fetch_level
 		select_level = fetch_level; //update select level;

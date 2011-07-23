@@ -92,16 +92,16 @@ void q8(char* path, char* outfile)
 	int result_count = 0;
 
 	start_time = clock();
-	while (has_more_slice)
+	while (1)
 	{
 		next_level = 0;
-
+		has_more_slice =0;
 		fetch_str(country, COUNTRY_MAX_DEF);
 		fetch_str(agent, AGENT_MAX_DEF);
 		fetch_count_only(request_id, REQUEST_ID_MAX_DEF);
 
 		/* check end condition */
-		if (columnar_eof(country) && columnar_eof(agent) && columnar_eof(request_id)) has_more_slice = 0;
+		if (!has_more_slice) break;
 
 		fetch_level = next_level; //update fetch_level
 		select_level = fetch_level; //update select level;

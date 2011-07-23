@@ -43,8 +43,6 @@ float FLOAT_NULL = 0.0;
 double DOUBLE_NULL = 0.0;
 char* STRING_NULL = "";
 
-#define  DATA_DIR	"../Dremel"
-
 #define COUNTRY_MAX_REP			0
 #define COUNTRY_MAX_DEF			1
 #define AGENT_MAX_REP			0
@@ -133,37 +131,45 @@ static inline bool str_compare2(const char* s1, const char* s2)
 
 #define fetch_str(col, max_def)\
 {\
-	if (col.level_ptr[0] >= fetch_level)\
+	if (!columnar_eof(col))\
 	{\
-		if (col.level_ptr[1] < max_def) /*is null*/\
+		has_more_slice = 1;\
+		if (col.level_ptr[0] >= fetch_level)\
 		{\
-			process_null_for_##col(STRING_NULL);\
+			if (col.level_ptr[1] < max_def) /*is null*/\
+			{\
+				process_null_for_##col(STRING_NULL);\
+			}\
+			else\
+			{\
+				int len = *col.data_ptr._int_ptr++;\
+				col.data_ptr._int_ptr++;\
+				process_value_for_##col(col.data_ptr._byte_ptr);\
+				len++;\
+				len += len % 4;\
+				col.data_ptr._byte_ptr += len;\
+			}\
+			col.level_ptr += 2;\
 		}\
-		else\
-		{\
-			int len = *col.data_ptr._int_ptr++;\
-			col.data_ptr._int_ptr++;\
-			process_value_for_##col(col.data_ptr._byte_ptr);\
-			len++;\
-			len += len % 4;\
-			col.data_ptr._byte_ptr += len;\
-		}\
-		col.level_ptr += 2;\
 	}\
-	if (next_level < col.level_ptr[0]) next_level = col.level_ptr[0];\
+	if ((!columnar_eof(col))&&(next_level < col.level_ptr[0])) next_level = col.level_ptr[0];\
 }
 
 #define fetch_count_only(col, max_def)\
 {\
-	if (col.level_ptr[0] >= fetch_level)\
+	if (!columnar_eof(col))\
 	{\
-		if (col.level_ptr[1] >= max_def) /*not null*/\
+		has_more_slice = 1;\
+		if (col.level_ptr[0] >= fetch_level)\
 		{\
-			process_count_for_##col();\
+			if (col.level_ptr[1] >= max_def) /*not null*/\
+			{\
+				process_count_for_##col();\
+			}\
+			col.level_ptr += 2;\
 		}\
-		col.level_ptr += 2;\
 	}\
-	if (next_level < col.level_ptr[0]) next_level = col.level_ptr[0];\
+	if ((!columnar_eof(col))&&(next_level < col.level_ptr[0])) next_level = col.level_ptr[0];\
 }
 
 void columnar_level_open(columnar* col, char* base_file_name)

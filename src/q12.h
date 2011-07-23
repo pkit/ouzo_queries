@@ -57,38 +57,42 @@ void q12(char* path, char* outfile)
 	result_count = 0;
 
 	start_time = clock();
-	while (has_more_slice)
+	while (1)
 	{
 		next_level = 0;
-
+		has_more_slice = 0;
 		/* fetch request_url */
-		if (request_url.level_ptr[0] >= fetch_level)
+		if (!columnar_eof(request_url))
 		{
-			if (request_url.level_ptr[1] < REQUEST_URL_MAX_DEF) //is null
+			has_more_slice = 1;
+			if (request_url.level_ptr[0] >= fetch_level)
 			{
-			}
-			else
-			{
-				int len = *request_url.data_ptr._int_ptr++;
-				request_url.data_ptr._int_ptr++;
-				url_out = request_url.data_ptr._byte_ptr;
-
-				if (check(url_out, len))
+				if (request_url.level_ptr[1] < REQUEST_URL_MAX_DEF) //is null
 				{
-					result[result_count++] = url_out;
 				}
+				else
+				{
+					int len = *request_url.data_ptr._int_ptr++;
+					request_url.data_ptr._int_ptr++;
+					url_out = request_url.data_ptr._byte_ptr;
 
-				len++;
-				len += len % 4;
-				request_url.data_ptr._byte_ptr += len;
+					if (check(url_out, len))
+					{
+						result[result_count++] = url_out;
+					}
 
+					len++;
+					len += len % 4;
+					request_url.data_ptr._byte_ptr += len;
+
+				}
+				request_url.level_ptr += 2;
 			}
-			request_url.level_ptr += 2;
 		}
-		if (next_level < request_url.level_ptr[0]) next_level = request_url.level_ptr[0];
+		if ((!columnar_eof(request_url)) && (next_level < request_url.level_ptr[0])) next_level = request_url.level_ptr[0];
 
 		/* check end condition */
-		if (columnar_eof(request_url)) has_more_slice = 0;
+		if (!has_more_slice) break;
 
 		fetch_level = next_level; //update fetch_level
 		select_level = fetch_level; //update select level;

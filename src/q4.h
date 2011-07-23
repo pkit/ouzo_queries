@@ -64,8 +64,9 @@ void q4(char* path, char* outfile)
 {
 	char tmp_path[1024];
 	COMMON_VARIABLES_DECLARE;
+
 	/* output */
-	char* country_out;
+	char* country_out = NULL;
 	int64_t session_id_out;
 	int64_t count_request_id_out = 0;
 
@@ -78,68 +79,88 @@ void q4(char* path, char* outfile)
 
 	q4_slice_set dmap;
 	dmap.set_empty_key(NULL);
+
+	assert(output_pool);
 	q4_slice* result = (q4_slice*) output_pool;
 	int result_count = 0;
 
 	start_time = clock();
-	while (has_more_slice)
+	while (1)
 	{
 		next_level = 0;
+		has_more_slice = 0;
 		/* fetch country */
-		if (country.level_ptr[0] >= fetch_level)
+		if (!columnar_eof(country))
 		{
-			if (country.level_ptr[1] < COUNTRY_MAX_DEF) //is null
+			has_more_slice = 1;
+			assert(country.level_ptr < country.level_end_buf);
+			if (country.level_ptr[0] >= fetch_level)
 			{
-				country_out = "NULL";
+				if (country.level_ptr[1] < COUNTRY_MAX_DEF) //is null
+				{
+					country_out = "NULL";
+				}
+				else
+				{
+					assert(country.data_ptr._byte_ptr < country.data_buf+country.data_size);
+					int len = *country.data_ptr._int_ptr++;
+					country.data_ptr._int_ptr++;
+					assert(country.data_ptr._byte_ptr < country.data_buf+country.data_size);
+					country_out = country.data_ptr._byte_ptr;
+					len++;
+					int padding_count = len % 4;
+					country.data_ptr._byte_ptr += len;
+					country.data_ptr._byte_ptr += padding_count;
+					assert(country.data_ptr._byte_ptr <= country.data_buf+country.data_size);
+				}
+				country.level_ptr += 2;
 			}
-			else
-			{
-				int len = *country.data_ptr._int_ptr++;
-				country.data_ptr._int_ptr++;
-				country_out = country.data_ptr._byte_ptr;
-				len++;
-				int padding_count = len % 4;
-				country.data_ptr._byte_ptr += len;
-				country.data_ptr._byte_ptr += padding_count;
-			}
-			country.level_ptr += 2;
 		}
-		if (next_level < country.level_ptr[0]) next_level = country.level_ptr[0];
+		if ((!columnar_eof(country)) && (next_level < country.level_ptr[0])) next_level = country.level_ptr[0];
 
 		/* fetch session_id */
-		if (session_id.level_ptr[0] >= fetch_level)
+
+		if (!columnar_eof(session_id))
 		{
-			if (session_id.level_ptr[1] < SESSION_ID_MAX_DEF) //is null (OPTIMIZATION HINT: not necessary because session_id is not null)
+			has_more_slice = 1;
+			assert(session_id.level_ptr < session_id.level_end_buf);
+			if (session_id.level_ptr[0] >= fetch_level)
 			{
-				//session_id.value._long_ptr = (int64_t*) &LONG_NULL;
+				if (session_id.level_ptr[1] < SESSION_ID_MAX_DEF) //is null (OPTIMIZATION HINT: not necessary because session_id is not null)
+				{
+					//session_id.value._long_ptr = (int64_t*) &LONG_NULL;
+				}
+				else
+				{
+					assert(session_id.data_ptr._byte_ptr < session_id.data_buf+session_id.data_size);
+					session_id_out = *session_id.data_ptr._long_ptr++;
+				}
+				session_id.level_ptr += 2;
 			}
-			else
-			{
-				//session_id.value._long_ptr = session_id.data_ptr._long_ptr++;
-				session_id_out = *session_id.data_ptr._long_ptr++;
-			}
-			session_id.level_ptr += 2;
 		}
-		if (next_level < session_id.level_ptr[0]) next_level = session_id.level_ptr[0];
+		if ((!columnar_eof(session_id)) && (next_level < session_id.level_ptr[0])) next_level = session_id.level_ptr[0];
 
 		/* fetch request_id */
-		if (request_id.level_ptr[0] >= fetch_level)
+		if (!columnar_eof(request_id))
 		{
-			if (request_id.level_ptr[1] < REQUEST_ID_MAX_DEF) //is null
+			has_more_slice = 1;
+			assert(request_id.level_ptr < request_id.level_end_buf);
+			if (request_id.level_ptr[0] >= fetch_level)
 			{
-				//request_id.value._long_ptr = (int64_t*) &LONG_NULL;
+				if (request_id.level_ptr[1] < REQUEST_ID_MAX_DEF) //is null
+				{
+				}
+				else
+				{
+					count_request_id_out++;
+				}
+				request_id.level_ptr += 2;
 			}
-			else
-			{
-				//request_id.value._long_ptr = request_id.data_ptr._long_ptr++; //OPTIMIZATION HINT: in case of COUNT the value is not necessary retrieved and do not need open data file
-				count_request_id_out++;
-			}
-			request_id.level_ptr += 2;
 		}
-		if (next_level < request_id.level_ptr[0]) next_level = request_id.level_ptr[0];
+		if ((!columnar_eof(request_id)) && (next_level < request_id.level_ptr[0])) next_level = request_id.level_ptr[0];
 
 		/* check end condition */
-		if (columnar_eof(country) && columnar_eof(session_id) && columnar_eof(request_id)) has_more_slice = 0;
+		if (!has_more_slice) break;
 
 		fetch_level = next_level; //update fetch_level
 		select_level = fetch_level; //update select level;

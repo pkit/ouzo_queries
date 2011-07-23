@@ -99,13 +99,14 @@ void q11(char* path, char* outfile)
 	dmap.set_empty_key("");
 
 	start_time = clock();
-	while (has_more_slice)
+	while (1)
 	{
 		next_level = 0;
+		has_more_slice = 0;
 		fetch_str(request_url, REQUEST_URL_MAX_DEF);
 
 		/* check end condition */
-		if (columnar_eof(request_url)) has_more_slice = 0;
+		if (!has_more_slice) break;
 		fetch_level = next_level; //update fetch_level
 		select_level = fetch_level; //update select level;
 	}
